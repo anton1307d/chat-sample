@@ -1,0 +1,314 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: chat_user
+      POSTGRES_PASSWORD: chat_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: chat-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin_password
+      MONGO_INITDB_DATABASE: chat_messages
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+    networks:
+      - chat-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_password --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: chat-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq_user
+      RABBITMQ_DEFAULT_PASS: rabbitmq_password
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - chat-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: chat-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@chat.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - chat-network
+    depends_on:
+      - postgres
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: chat-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin_password
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin_password@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    ports:
+      - "8081:8081"
+    networks:
+      - chat-network
+    depends_on:
+      - mongodb
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: chat-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:redis_password
+    ports:
+      - "8089:8081"
+    networks:
+      - chat-network
+    depends_on:
+      - redis
+
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/users/Dockerfile
+    container_name: chat-user-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Database
+      DATABASE_URL: postgresql://chat_user:chat_password@postgres:5432/chat_db
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_password
+      # RabbitMQ
+      RABBITMQ_URL: amqp://rabbitmq_user:rabbitmq_password@rabbitmq:5672
+      # JWT
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
+      JWT_EXPIRES_IN: 1h
+      JWT_REFRESH_EXPIRES_IN: 7d
+    ports:
+      - "3001:3001"
+    networks:
+      - chat-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./apps/users:/app/apps/users
+      - /app/node_modules
+      - /app/apps/users/node_modules
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: apps/chat/Dockerfile
+    container_name: chat-chat-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      # MongoDB
+      MONGODB_URI: mongodb://admin:admin_password@mongodb:27017/chat_messages?authSource=admin
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_password
+      # RabbitMQ
+      RABBITMQ_URL: amqp://rabbitmq_user:rabbitmq_password@rabbitmq:5672
+      # Services
+      USER_SERVICE_URL: http://user-service:3001
+    ports:
+      - "3003:3003"
+    networks:
+      - chat-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./apps/chat:/app/apps/chat
+      - /app/node_modules
+      - /app/apps/chat/node_modules
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: chat-api-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Services
+      USER_SERVICE_URL: http://user-service:3001
+      CHAT_SERVICE_URL: http://chat-service:3003
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_password
+      # JWT
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      # Rate Limiting
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      # CORS
+      CORS_ORIGIN: http://localhost:3001,http://localhost:5173
+    ports:
+      - "3000:3000"
+    networks:
+      - chat-network
+    depends_on:
+      - user-service
+      - chat-service
+      - redis
+    volumes:
+      - ./apps/api-gateway:/app/apps/api-gateway
+      - /app/node_modules
+      - /app/apps/api-gateway/node_modules
+
+  # WebSocket Gateway
+  websocket-gateway:
+    build:
+      context: .
+      dockerfile: apps/websocket-gateway/Dockerfile
+    container_name: chat-websocket-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      # Redis (for Socket.IO adapter)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_password
+      # RabbitMQ
+      RABBITMQ_URL: amqp://rabbitmq_user:rabbitmq_password@rabbitmq:5672
+      # JWT
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      # Services
+      CHAT_SERVICE_URL: http://chat-service:3003
+      USER_SERVICE_URL: http://user-service:3001
+      # CORS
+      CORS_ORIGIN: http://localhost:3001,http://localhost:5173
+    ports:
+      - "3002:3002"
+    networks:
+      - chat-network
+    depends_on:
+      - redis
+      - rabbitmq
+      - chat-service
+    volumes:
+      - ./apps/websocket-gateway:/app/apps/websocket-gateway
+      - /app/node_modules
+      - /app/apps/websocket-gateway/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: chat-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      VITE_API_URL: http://localhost:3000/api/v1
+      VITE_SOCKET_URL: http://localhost:3002
+      VITE_APP_NAME: Chat App
+    ports:
+      - "5173:80"
+    networks:
+      - chat-network
+    depends_on:
+      - api-gateway
+      - websocket-gateway
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/node_modules
+      - /app/apps/web/node_modules
+
+networks:
+  chat-network:
+    driver: bridge
+    name: chat-network
+
+
+volumes:
+  postgres_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  pgadmin_data:
+    driver: local
