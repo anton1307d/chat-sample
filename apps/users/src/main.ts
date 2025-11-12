@@ -3,13 +3,13 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import {AppModule} from "./app.module";
+import {HttpExceptionFilter} from "@app/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const logger = app.get(Logger);
 
-    // Global pipes
     app.useGlobalPipes(
         new ValidationPipe({
             whitelist: true,
@@ -18,8 +18,7 @@ async function bootstrap() {
         }),
     );
 
-    // Global filters
-    // app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalFilters(new HttpExceptionFilter());
 
     // CORS
     app.enableCors({
@@ -31,10 +30,10 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  const httpPort = configService.getOrThrow<number>('HTTP_PORT');
-  await app.listen(httpPort);
+  const port = process.env.HTTP_PORT || 3001;
+  await app.listen(port);
 
-  logger.log(`🚀 Users service is running on port ${httpPort}`, 'Bootstrap');
+  logger.log(`🚀 Users service is running on port ${port}`, 'Bootstrap');
   logger.log(`🌍 Environment: ${configService.get('NODE_ENV')}`, 'Bootstrap');
 }
 

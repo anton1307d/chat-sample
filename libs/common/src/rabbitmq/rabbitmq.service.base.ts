@@ -26,9 +26,9 @@ export abstract class RabbitMQServiceBase implements OnModuleDestroy {
 
     protected async connect(): Promise<void> {
         try {
-            const uri = this.configService.get<string>('RABBITMQ_URI');
+            const uri = this.configService.get<string>('RABBITMQ_URL');
             if (!uri) {
-                throw new Error('RABBITMQ_URI is not configured');
+                throw new Error('RABBITMQ_URL is not configured');
             }
 
             this.connection = await connect(uri);

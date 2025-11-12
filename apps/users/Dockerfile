@@ -15,6 +15,25 @@ RUN pnpm install --frozen-lockfile
 COPY apps/users ./apps/users
 COPY libs ./libs
 
+CMD ["pnpm", "run", "start:dev", "users"]
+
+FROM node:20-alpine AS build
+
+WORKDIR /usr/src/app
+
+RUN npm install -g pnpm
+
+COPY .npmrc ./
+COPY package.json ./
+COPY pnpm-lock.yaml ./
+COPY tsconfig.json ./
+COPY nest-cli.json ./
+
+RUN pnpm install --frozen-lockfile
+
+COPY apps/users ./apps/users
+COPY libs ./libs
+
 RUN pnpm run build users
 
 FROM node:20-alpine AS production
@@ -32,6 +51,6 @@ COPY pnpm-lock.yaml ./
 
 RUN pnpm install --prod --frozen-lockfile
 
-COPY --from=development /usr/src/app/dist ./dist
+COPY --from=build /usr/src/app/dist ./dist
 
 CMD ["node", "dist/apps/users/main"]

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { GatewayModule } from './gateway/gateway.module';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { RedisModule } from './redis/redis.module';
+import {LoggerModule} from "@app/common";
 
 @Module({
     imports: [
@@ -13,6 +14,8 @@ import { RedisModule } from './redis/redis.module';
         RedisModule,
         RabbitMQModule,
         GatewayModule,
+        LoggerModule
     ],
 })
+
 export class AppModule {}

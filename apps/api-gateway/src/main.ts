@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from '@app/common';
+import { HttpExceptionFilter} from '@app/common';
 import helmet from 'helmet';
 import * as compression from 'compression';
 
@@ -9,7 +9,6 @@ async function bootstrap() {
     const logger = new Logger('APIGateway');
     const app = await NestFactory.create(AppModule);
 
-    // Security
     app.use(helmet());
     app.use(compression());
 
@@ -21,7 +20,7 @@ async function bootstrap() {
         }),
     );
 
-    app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalFilters(new HttpExceptionFilter());
 
     app.enableCors({
         origin: process.env.CORS_ORIGIN?.split(',') || '*',

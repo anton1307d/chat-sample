@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '@app/common';
@@ -24,15 +24,18 @@ export class JwtAuthGuard {
         const token = this.extractToken(request);
 
         if (!token) {
-            return false;
+            throw new UnauthorizedException('Missing authorization token');
         }
 
         try {
-            const payload = this.jwtService.verify(token);
+            const payload = this.jwtService.verify(token, {
+                clockTolerance: 60,
+            });
             request.user = payload;
+            request.userId = payload.userId;
             return true;
-        } catch {
-            return false;
+        } catch (error) {
+            throw new UnauthorizedException('Invalid token');
         }
     }
 
@@ -42,3 +45,4 @@ export class JwtAuthGuard {
         return auth.startsWith('Bearer ') ? auth.substring(7) : auth;
     }
 }
+

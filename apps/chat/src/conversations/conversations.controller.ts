@@ -3,16 +3,15 @@ import {
     Get,
     Post,
     Body,
-    Param,
-    Query,
-    UseGuards,
+    Param, UseGuards
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { AddParticipantDto } from './dto/add-participant.dto';
-import { CurrentUser } from '@app/common';
+import { CurrentUser, InternalServiceGuard } from '@app/common';
 
 @Controller('conversations')
+@UseGuards(InternalServiceGuard)
 export class ConversationsController {
     constructor(
         private readonly conversationsService: ConversationsService,
@@ -20,7 +19,7 @@ export class ConversationsController {
 
     @Post()
     async create(
-        @CurrentUser('userId') userId: string,
+        @CurrentUser() userId: string,
         @Body() dto: CreateConversationDto,
     ) {
         return this.conversationsService.create(userId, dto);

@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { GatewayModule } from './gateway/gateway.module';
+import {ConfigModule, ConfigService} from '@nestjs/config';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { RedisModule } from './redis/redis.module';
+import {LoggerModule} from "@app/common";
+import {ConversationsModule} from "./conversations/conversations.module";
+import {TypeOrmModule} from "@nestjs/typeorm";
+import {Participant} from "./conversations/entities/participant.entity";
+import {Conversation} from "./conversations/entities/conversation.entity";
 
 @Module({
     imports: [
@@ -10,9 +14,21 @@ import { RedisModule } from './redis/redis.module';
             isGlobal: true,
             envFilePath: '.env',
         }),
+        TypeOrmModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                type: 'postgres',
+                url:  configService.get('DATABASE_URL'),
+                entities: [Participant, Conversation],
+                synchronize: true,
+                logging: configService.get('NODE_ENV') === 'development',
+            }),
+            inject: [ConfigService],
+        }),
         RedisModule,
         RabbitMQModule,
-        GatewayModule,
+        LoggerModule,
+        ConversationsModule,
     ],
 })
 export class AppModule {}

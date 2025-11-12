@@ -1,52 +1,38 @@
-import {
-    Controller,
-    Get,
-    Put,
-    Body,
-    Param,
-    UseGuards,
-} from '@nestjs/common';
-import { HttpProxyService } from './services/http.service';
-import { CurrentUser } from '@app/common';
-import { ConfigService } from '@nestjs/config';
+import { Controller, All, Req, Param, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
+import { HttpService } from './services/http.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {ConfigService} from "@nestjs/config";
+import {CurrentUser} from "@app/common";
 
 @Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
-    private readonly usersServiceUrl: string;
-
     constructor(
-        private httpProxy: HttpProxyService,
-        private configService: ConfigService,
-    ) {
-        this.usersServiceUrl = this.configService.get('USERS_SERVICE_URL');
-    }
+        private readonly httpService: HttpService,
+        private readonly configsService: ConfigService
+    ) {}
 
-    @Get('me')
-    async getProfile(@CurrentUser('userId') userId: string) {
-        return this.httpProxy.get(`${this.usersServiceUrl}/users/me`, {
-            headers: { 'X-User-Id': userId },
-        });
-    }
+    @All('*path')
+    async proxy(@Req() req: Request, @Param('path') path: string, @CurrentUser() userId: string) {
 
-    @Put('me')
-    async updateProfile(
-        @CurrentUser('userId') userId: string,
-        @Body() dto: any,
-    ) {
-        return this.httpProxy.put(`${this.usersServiceUrl}/users/me`, dto, {
-            headers: { 'X-User-Id': userId },
-        });
-    }
+        const usersServiceUrl = this.configsService.getOrThrow<string>('USER_SERVICE_URL');
+        const targetUrl = `${usersServiceUrl}/users/${path || ''}`;
 
-    @Get(':id')
-    async getUserById(@Param('id') id: string) {
-        return this.httpProxy.get(`${this.usersServiceUrl}/users/${id}`);
-    }
 
-    @Get('presence/:userId')
-    async getPresence(@Param('userId') userId: string) {
-        return this.httpProxy.get(
-            `${this.usersServiceUrl}/presence/${userId}`,
+        const headers = {
+            'x-user-id': userId,
+            'content-type': req.headers['content-type'],
+        };
+
+        console.log('Proxying request to:', headers);
+
+        return this.httpService.forward(
+            targetUrl,
+            req.method,
+            req.body,
+            headers,
         );
     }
 }
+

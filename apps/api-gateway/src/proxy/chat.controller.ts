@@ -1,89 +1,33 @@
-import {
-    Controller,
-    Get,
-    Post,
-    Body,
-    Param,
-    Query,
-    UseGuards,
-} from '@nestjs/common';
-import { HttpProxyService } from './services/http.service';
-import { CurrentUser } from '@app/common';
-import { ConfigService } from '@nestjs/config';
+import {Controller, All, Req, UseGuards, Param} from '@nestjs/common';
+import { Request } from 'express';
+import { HttpService } from './services/http.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {ConfigService} from "@nestjs/config";
 
 @Controller('chat')
+@UseGuards(JwtAuthGuard)
 export class ChatController {
-    private readonly chatServiceUrl: string;
-
     constructor(
-        private httpProxy: HttpProxyService,
-        private configService: ConfigService,
-    ) {
-        this.chatServiceUrl = this.configService.get('CHAT_SERVICE_URL');
-    }
+        private readonly httpService: HttpService,
+        private readonly configsService: ConfigService
+    ) {}
 
-    // Conversations
-    @Post('conversations')
-    async createConversation(
-        @CurrentUser('userId') userId: string,
-        @Body() dto: any,
-    ) {
-        return this.httpProxy.post(
-            `${this.chatServiceUrl}/conversations`,
-            dto,
-            {
-                headers: { 'X-User-Id': userId },
-            },
-        );
-    }
+    @All('*path')
+    async proxy(@Req() req: Request, @Param('path') path: string) {
+        const chatServiceUrl = this.configsService.getOrThrow<string>('CHAT_SERVICE_URL');
+        req.url.replace('/chat', '');
+        const targetUrl = `${chatServiceUrl}/${path}`;
 
-    @Get('conversations')
-    async getConversations(@CurrentUser('userId') userId: string) {
-        return this.httpProxy.get(`${this.chatServiceUrl}/conversations`, {
-            headers: { 'X-User-Id': userId },
-        });
-    }
+        const headers = {
+            'x-user-id': req['userId'],
+            'content-type': req.headers['content-type'],
+        };
 
-    @Get('conversations/:id')
-    async getConversation(@Param('id') id: string) {
-        return this.httpProxy.get(
-            `${this.chatServiceUrl}/conversations/${id}`,
-        );
-    }
-
-    // Messages
-    @Post('messages')
-    async sendMessage(
-        @CurrentUser('userId') userId: string,
-        @Body() dto: any,
-    ) {
-        return this.httpProxy.post(`${this.chatServiceUrl}/messages`, dto, {
-            headers: { 'X-User-Id': userId },
-        });
-    }
-
-    @Get('messages/conversation/:conversationId')
-    async getMessages(
-        @Param('conversationId') conversationId: string,
-        @Query() query: any,
-    ) {
-        return this.httpProxy.get(
-            `${this.chatServiceUrl}/messages/conversation/${conversationId}`,
-            { params: query },
-        );
-    }
-
-    @Post('messages/:messageId/read')
-    async markAsRead(
-        @Param('messageId') messageId: string,
-        @CurrentUser('userId') userId: string,
-    ) {
-        return this.httpProxy.post(
-            `${this.chatServiceUrl}/messages/${messageId}/read`,
-            {},
-            {
-                headers: { 'X-User-Id': userId },
-            },
+        return this.httpService.forward(
+            targetUrl,
+            req.method,
+            req.body,
+            headers,
         );
     }
 }

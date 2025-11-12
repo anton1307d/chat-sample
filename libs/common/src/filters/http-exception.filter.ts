@@ -28,7 +28,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const status = exception.getStatus();
         const exceptionResponse = exception.getResponse();
 
-        const errorResponse = {
+        const errorResponse: any = {
             statusCode: status,
             timestamp: new Date().toISOString(),
             path: request.url,
@@ -38,6 +38,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
                     ? exceptionResponse
                     : (exceptionResponse as any).message || 'Internal server error',
         };
+
+        // Add validation errors if they exist
+        if (typeof exceptionResponse === 'object' && (exceptionResponse as any).message) {
+            const messages = (exceptionResponse as any).message;
+            if (Array.isArray(messages)) {
+                errorResponse.errors = messages;
+            }
+        }
 
         this.logger.error(
             `${request.method} ${request.url}`,

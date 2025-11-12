@@ -5,6 +5,7 @@ import { MessagesService } from './messages.service';
 import { Message, MessageSchema } from './schemas/message.schema';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { RabbitMQModule } from '../rabbitmq/rabbitmq.module';
+import {InternalServiceGuard} from "../guards/internal-service.guard";
 
 @Module({
     imports: [
@@ -13,7 +14,7 @@ import { RabbitMQModule } from '../rabbitmq/rabbitmq.module';
         RabbitMQModule,
     ],
     controllers: [MessagesController],
-    providers: [MessagesService],
+    providers: [MessagesService, InternalServiceGuard],
     exports: [MessagesService],
 })
 export class MessagesModule {}

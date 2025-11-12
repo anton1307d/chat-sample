@@ -8,7 +8,8 @@ import { PresenceModule } from './presence/presence.module';
 import { HealthModule } from './health/health.module';
 import { RedisModule } from './redis/redis.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-
+import {InternalServiceGuard, LoggerModule} from "@app/common";
+import { User } from './users/entities/user.entity';
 @Module({
     imports: [
         ConfigModule.forRoot({
@@ -19,13 +20,9 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
                 type: 'postgres',
-                host: configService.get('POSTGRES_HOST'),
-                port: configService.get('POSTGRES_PORT'),
-                username: configService.get('POSTGRES_USER'),
-                password: configService.get('POSTGRES_PASSWORD'),
-                database: configService.get('POSTGRES_DB'),
-                entities: [__dirname + '/**/*.entity{.ts,.js}'],
-                synchronize: configService.get('POSTGRES_SYNCHRONIZE') === 'true',
+                url:  configService.get('DATABASE_URL'),
+                entities: [User],
+                synchronize: true,
                 logging: configService.get('NODE_ENV') === 'development',
             }),
             inject: [ConfigService],
@@ -35,12 +32,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
         UsersModule,
         PresenceModule,
         HealthModule,
-    ],
-    providers: [
-        {
-            provide: APP_GUARD,
-            useClass: JwtAuthGuard,
-        },
-    ],
+        LoggerModule
+    ]
 })
 export class AppModule {}

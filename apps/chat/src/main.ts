@@ -16,7 +16,7 @@ async function bootstrap() {
 
     app.enableShutdownHooks();
 
-    const port = process.env.WS_PORT || 3002;
+    const port = process.env.WS_PORT || 3003;
     await app.listen(port);
 
     logger.log(`🔌 WebSocket Gateway running on: http://localhost:${port}`);

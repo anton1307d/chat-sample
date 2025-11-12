@@ -1,14 +1,15 @@
 import {
     Controller,
     Get,
-    Post,
     Param,
-    Query,
+    Query, UseGuards,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { GetMessagesDto } from './dto/get-messages.dto';
+import {InternalServiceGuard} from "../guards/internal-service.guard";
 
 @Controller('messages')
+@UseGuards(InternalServiceGuard)
 export class MessagesController {
     constructor(private readonly messagesService: MessagesService) {}
 

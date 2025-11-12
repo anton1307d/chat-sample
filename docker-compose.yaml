@@ -130,10 +130,11 @@ services:
     build:
       context: .
       dockerfile: apps/users/Dockerfile
+      target: development
     container_name: chat-user-service
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3001
       # Database
       DATABASE_URL: postgresql://chat_user:chat_password@postgres:5432/chat_db
@@ -160,18 +161,20 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ./apps/users:/app/apps/users
-      - /app/node_modules
-      - /app/apps/users/node_modules
+      - ./apps/users/src:/usr/src/app/apps/users/src
+      - ./apps/users/tsconfig.app.json:/usr/src/app/apps/users/tsconfig.app.json
+      - ./libs:/usr/src/app/libs
+      - /usr/src/app/node_modules
 
   chat-service:
     build:
       context: .
       dockerfile: apps/chat/Dockerfile
+      target: development
     container_name: chat-chat-service
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3003
       # MongoDB
       MONGODB_URI: mongodb://admin:admin_password@mongodb:27017/chat_messages?authSource=admin
@@ -183,6 +186,7 @@ services:
       RABBITMQ_URL: amqp://rabbitmq_user:rabbitmq_password@rabbitmq:5672
       # Services
       USER_SERVICE_URL: http://user-service:3001
+      DATABASE_URL: postgresql://chat_user:chat_password@postgres:5432/conversation_db
     ports:
       - "3003:3003"
     networks:
@@ -195,19 +199,21 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ./apps/chat:/app/apps/chat
-      - /app/node_modules
-      - /app/apps/chat/node_modules
+      - ./apps/chat/src:/usr/src/app/apps/chat/src
+      - ./apps/chat/tsconfig.app.json:/usr/src/app/apps/chat/tsconfig.app.json
+      - ./libs:/usr/src/app/libs
+      - /usr/src/app/node_modules
 
   # API Gateway
   api-gateway:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
+      target: development
     container_name: chat-api-gateway
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3000
       # Services
       USER_SERVICE_URL: http://user-service:3001
@@ -232,19 +238,21 @@ services:
       - chat-service
       - redis
     volumes:
-      - ./apps/api-gateway:/app/apps/api-gateway
-      - /app/node_modules
-      - /app/apps/api-gateway/node_modules
+      - ./apps/api-gateway/src:/usr/src/app/apps/api-gateway/src
+      - ./apps/api-gateway/tsconfig.app.json:/usr/src/app/apps/api-gateway/tsconfig.app.json
+      - ./libs:/usr/src/app/libs
+      - /usr/src/app/node_modules
 
   # WebSocket Gateway
   websocket-gateway:
     build:
       context: .
       dockerfile: apps/websocket-gateway/Dockerfile
+      target: development
     container_name: chat-websocket-gateway
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3002
       # Redis (for Socket.IO adapter)
       REDIS_HOST: redis
@@ -268,9 +276,10 @@ services:
       - rabbitmq
       - chat-service
     volumes:
-      - ./apps/websocket-gateway:/app/apps/websocket-gateway
-      - /app/node_modules
-      - /app/apps/websocket-gateway/node_modules
+      - ./apps/websocket-gateway/src:/usr/src/app/apps/websocket-gateway/src
+      - ./apps/websocket-gateway/tsconfig.app.json:/usr/src/app/apps/websocket-gateway/tsconfig.app.json
+      - ./libs:/usr/src/app/libs
+      - /usr/src/app/node_modules
 
   web:
     build:
@@ -299,8 +308,6 @@ networks:
   chat-network:
     driver: bridge
     name: chat-network
-
-
 volumes:
   postgres_data:
     driver: local

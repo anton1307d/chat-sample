@@ -7,6 +7,8 @@ import { RoomService } from './services/room.service';
 import { MessageService } from './services/message.service';
 import { PresenceService } from './services/presence.service';
 import { RedisModule } from '../redis/redis.module';
+import {RabbitMQModule} from "../rabbitmq/rabbitmq.module";
+import { forwardRef } from '@nestjs/common';
 
 @Module({
     imports: [
@@ -18,6 +20,7 @@ import { RedisModule } from '../redis/redis.module';
             inject: [ConfigService],
         }),
         RedisModule,
+        forwardRef(() => RabbitMQModule)
     ],
     providers: [
         ChatGateway,
