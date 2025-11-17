@@ -33,4 +33,8 @@ export class RoomService {
     async getUserConversations(userId: string): Promise<string[]> {
         return this.redis.smembers(`user:${userId}:conversations`);
     }
+
+    async getConversationMembers(conversationId: string): Promise<string[]> {
+        return this.redis.smembers(`conversation:${conversationId}`);
+    }
 }

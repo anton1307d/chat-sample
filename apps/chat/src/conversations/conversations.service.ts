@@ -60,7 +60,6 @@ export class ConversationsService {
     async getParticipants(conversationId: string) {
         return await this.participantRepo.find({
             where: { conversationId },
-            relations: ['user'],
         });
     }
 

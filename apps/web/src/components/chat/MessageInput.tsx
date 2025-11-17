@@ -1,57 +1,38 @@
-import { useState } from 'react';
-import { Send } from 'lucide-react';
-import { useTyping } from '@hooks/useTyping';
-import { Button } from '@components/ui/Button';
+import React, { useState } from 'react';
 
 interface MessageInputProps {
     onSend: (content: string) => void;
-    conversationId: string;
 }
 
-export const MessageInput = ({ onSend, conversationId }: MessageInputProps) => {
-    const [message, setMessage] = useState('');
-    const { handleTyping } = useTyping(conversationId);
+export const MessageInput: React.FC<MessageInputProps> = ({ onSend }) => {
+    const [content, setContent] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (message.trim()) {
-            onSend(message.trim());
-            setMessage('');
-        }
-    };
-
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setMessage(e.target.value);
-        handleTyping();
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit(e);
+        if (content.trim()) {
+            onSend(content.trim());
+            setContent('');
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex items-end gap-2">
-      <textarea
-          value={message}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          rows={1}
-          className="flex-1 resize-none border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          style={{ minHeight: '44px', maxHeight: '200px' }}
-      />
-
-            <Button
-                type="submit"
-                disabled={!message.trim()}
-                className="flex-shrink-0"
-            >
-                <Send className="w-5 h-5" />
-            </Button>
+        <form onSubmit={handleSubmit} className="p-4 border-t">
+            <div className="flex gap-2">
+                <input
+                    type="text"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Type a message..."
+                    className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                />
+                <button
+                    type="submit"
+                    disabled={!content.trim()}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg disabled:opacity-50"
+                >
+                    Send
+                </button>
+            </div>
         </form>
     );
 };

@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ConversationList } from '@components/conversations/ConversationList';
 import { ChatWindow } from '@components/chat/ChatWindow';
 import { useConversations } from '@hooks/useConversations';
@@ -6,6 +6,11 @@ import { useConversations } from '@hooks/useConversations';
 export default function HomePage() {
     const { conversationId } = useParams<{ conversationId: string }>();
     const { conversations, setActiveConversation } = useConversations();
+    const navigate = useNavigate();
+    const handleSelectConversation = (id: string) => {
+        setActiveConversation(id);
+        navigate(`/conversations/${id}`);
+    };
 
     return (
         <div className="flex h-screen">
@@ -14,7 +19,7 @@ export default function HomePage() {
                 <ConversationList
                     conversations={conversations}
                     activeId={conversationId}
-                    onSelect={setActiveConversation}
+                    onSelect={handleSelectConversation}
                 />
             </div>
 
@@ -24,7 +29,7 @@ export default function HomePage() {
                     <ChatWindow conversationId={conversationId} />
                 ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
-                        Select a conversation to start chatting
+                        Select as conversation to start chatting
                     </div>
                 )}
             </div>

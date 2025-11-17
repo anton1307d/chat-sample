@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { GetMessagesDto } from './dto/get-messages.dto';
-import {InternalServiceGuard} from "../guards/internal-service.guard";
+import { InternalServiceGuard } from '@app/common';
 
 @Controller('messages')
 @UseGuards(InternalServiceGuard)

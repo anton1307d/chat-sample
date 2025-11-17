@@ -10,6 +10,8 @@ import { Logger } from '@nestjs/common';
 import { ConnectionService } from './services/connection.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { EVENTS } from '@app/contracts';
+import {PresenceService} from "./services/presence.service";
+import {RoomService} from "./services/room.service";
 
 @WebSocketGateway({
     cors: { origin: '*' },
@@ -23,8 +25,101 @@ export class ChatGateway {
 
     constructor(
         private readonly connectionService: ConnectionService,
+        private readonly presenceService: PresenceService,
+        private readonly roomService: RoomService,
         private readonly rabbitMQService: RabbitMQService,
     ) {}
+
+    async afterInit(server: Server) {
+        this.connectionService.setServer(server);
+        this.logger.log('ChatGateway initialized');
+    }
+
+    /**
+     * Called automatically when client connects
+     */
+    async handleConnection(client: Socket) {
+        try {
+            const userId = await this.connectionService.handleConnection(client);
+            await this.presenceService.setUserOnline(userId, client.id);
+
+            this.logger.log(`Client connected: ${client.id}, User: ${userId}`);
+
+            client.emit('connection:success', {
+                userId,
+                socketId: client.id,
+            });
+        } catch (error) {
+            this.logger.error(`Connection failed: ${error.message}`);
+            client.emit('connection:error', { error: error.message });
+            client.disconnect();
+        }
+    }
+
+    async handleDisconnect(client: Socket) {
+        try {
+            const userId = await this.connectionService.handleDisconnection(client);
+
+            if (userId) {
+                await this.presenceService.setUserOffline(userId, client.id);
+                this.logger.log(`Client disconnected: ${client.id}, User: ${userId}`);
+            }
+        } catch (error) {
+            this.logger.error(`Disconnection error: ${error.message}`);
+        }
+    }
+
+    @SubscribeMessage('conversation:join')
+    async handleJoinConversation(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { conversationId: string },
+    ) {
+        try {
+            const userId = await this.connectionService.getUserId(client.id);
+
+            if (!userId) {
+                return { success: false, error: 'Not authenticated' };
+            }
+
+            await this.roomService.joinConversation(
+                client,
+                userId,
+                data.conversationId,
+            );
+
+            this.logger.log(
+                `User ${userId} joined conversation ${data.conversationId}`,
+            );
+
+            return { success: true };
+        } catch (error) {
+            this.logger.error(`Failed to join conversation: ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Leave conversation room
+     * Triggered by: socket.emit('conversation:leave', { conversationId })
+     */
+    @SubscribeMessage('conversation:leave')
+    async handleLeaveConversation(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { conversationId: string },
+    ) {
+        try {
+            await this.roomService.leaveConversation(client, data.conversationId);
+
+            this.logger.log(
+                `Client ${client.id} left conversation ${data.conversationId}`,
+            );
+
+            return { success: true };
+        } catch (error) {
+            this.logger.error(`Failed to leave conversation: ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    }
 
     @SubscribeMessage('message:send')
     async handleOutgoingMessage(
@@ -53,10 +148,8 @@ export class ChatGateway {
                 };
             }
 
-            // 3. Generate temporary message ID
             const tempMessageId = `temp:${Date.now()}:${userId}`;
 
-            // 4. Publish DIRECTLY to RabbitMQ (NO Redis storage)
             await this.rabbitMQService.publish('chat.exchange', 'message.create.request', {
                 eventType: EVENTS.MESSAGE_CREATE_REQUEST,
                 tempMessageId,
@@ -74,7 +167,7 @@ export class ChatGateway {
 
             return {
                 success: true,
-                messageId: tempMessageId, // Temporary ID until persisted
+                messageId: tempMessageId,
             };
 
         } catch (error) {

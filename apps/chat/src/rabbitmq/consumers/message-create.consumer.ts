@@ -64,10 +64,10 @@ export class MessageCreateConsumer extends RabbitMQBaseConsumer {
             event.senderId,
         );
 
-        if (!isParticipant) {
-            await this.publishMessageError(event, 'Not a participant in this conversation');
-            return;
-        }
+        // if (!isParticipant) {
+        //     await this.publishMessageError(event, 'Not a participant in this conversation');
+        //     return;
+        // }
 
         if (!event.content || event.content.trim().length === 0) {
             await this.publishMessageError(event, 'Message content cannot be empty');

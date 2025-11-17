@@ -6,6 +6,7 @@ import { EVENTS } from '@app/contracts';
 import { Channel } from 'amqplib';
 import {InjectRedis} from "../../redis/redis.decorator";
 import {Redis} from "ioredis";
+import {PresenceService} from "../../gateway/services/presence.service";
 
 @Injectable()
 export class MessageDeliveryConsumer extends RabbitMQBaseConsumer {
@@ -14,6 +15,7 @@ export class MessageDeliveryConsumer extends RabbitMQBaseConsumer {
     constructor(
         private readonly rabbitMQService: RabbitMQService,
         private readonly chatGateway: ChatGateway,
+        private readonly presenceService: PresenceService,
         @InjectRedis() private redis: Redis,
     ) {
         super();
@@ -59,7 +61,9 @@ export class MessageDeliveryConsumer extends RabbitMQBaseConsumer {
         for (const userId of participants) {
             if (userId === senderId) continue;
 
-            const isOnline = await this.redis.exists(`user:${userId}:online`);
+            console.log("Sending message to user:", userId);
+
+            const isOnline = await this.presenceService.isUserOnline(userId);
 
             if (isOnline) {
                 const socketIds = await this.redis.smembers(`user:${userId}:sockets`);

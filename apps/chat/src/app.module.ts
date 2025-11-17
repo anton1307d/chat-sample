@@ -7,6 +7,8 @@ import {ConversationsModule} from "./conversations/conversations.module";
 import {TypeOrmModule} from "@nestjs/typeorm";
 import {Participant} from "./conversations/entities/participant.entity";
 import {Conversation} from "./conversations/entities/conversation.entity";
+import {MessagesModule} from "./messages/messages.module";
+import {MongooseModule} from "@nestjs/mongoose";
 
 @Module({
     imports: [
@@ -25,10 +27,18 @@ import {Conversation} from "./conversations/entities/conversation.entity";
             }),
             inject: [ConfigService],
         }),
+        MongooseModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                uri: configService.get('MONGODB_URI'),
+            }),
+            inject: [ConfigService],
+        }),
         RedisModule,
         RabbitMQModule,
         LoggerModule,
         ConversationsModule,
+        MessagesModule,
     ],
 })
 export class AppModule {}

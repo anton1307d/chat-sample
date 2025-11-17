@@ -5,7 +5,7 @@ import { Redis } from 'ioredis';
 @Injectable()
 export class PresenceService {
     private readonly logger = new Logger(PresenceService.name);
-    private readonly PRESENCE_TTL = 60; // seconds
+    private readonly PRESENCE_TTL = 60 * 60; // seconds
 
     constructor(@InjectRedis() private redis: Redis) {}
 
@@ -17,6 +17,10 @@ export class PresenceService {
         );
 
         this.logger.log(`User ${userId} is online`);
+    }
+
+    async isUserOnline(userId: string): Promise<boolean> {
+        return this.redis.exists(`user:${userId}:online`).then((result) => result === 1);
     }
 
     async setUserOffline(userId: string, socketId: string) {

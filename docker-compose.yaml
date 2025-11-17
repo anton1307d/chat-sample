@@ -135,7 +135,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      PORT: 3001
+      PORT: 3004
       # Database
       DATABASE_URL: postgresql://chat_user:chat_password@postgres:5432/chat_db
       # Redis
@@ -150,7 +150,7 @@ services:
       JWT_EXPIRES_IN: 1h
       JWT_REFRESH_EXPIRES_IN: 7d
     ports:
-      - "3001:3001"
+      - "3004:3004"
     networks:
       - chat-network
     depends_on:
@@ -164,7 +164,7 @@ services:
       - ./apps/users/src:/usr/src/app/apps/users/src
       - ./apps/users/tsconfig.app.json:/usr/src/app/apps/users/tsconfig.app.json
       - ./libs:/usr/src/app/libs
-      - /usr/src/app/node_modules
+      - /app/node_modules
 
   chat-service:
     build:
@@ -185,7 +185,7 @@ services:
       # RabbitMQ
       RABBITMQ_URL: amqp://rabbitmq_user:rabbitmq_password@rabbitmq:5672
       # Services
-      USER_SERVICE_URL: http://user-service:3001
+      USER_SERVICE_URL: http://user-service:3004
       DATABASE_URL: postgresql://chat_user:chat_password@postgres:5432/conversation_db
     ports:
       - "3003:3003"
@@ -216,7 +216,7 @@ services:
       NODE_ENV: development
       PORT: 3000
       # Services
-      USER_SERVICE_URL: http://user-service:3001
+      USER_SERVICE_URL: http://user-service:3004
       CHAT_SERVICE_URL: http://chat-service:3003
       # Redis
       REDIS_HOST: redis
@@ -228,7 +228,7 @@ services:
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX_REQUESTS: 100
       # CORS
-      CORS_ORIGIN: http://localhost:3001,http://localhost:5173
+      CORS_ORIGIN: http://localhost:3004,http://localhost:5173,http://localhost:3001
     ports:
       - "3000:3000"
     networks:
@@ -264,9 +264,9 @@ services:
       JWT_SECRET: your-super-secret-jwt-key-change-in-production
       # Services
       CHAT_SERVICE_URL: http://chat-service:3003
-      USER_SERVICE_URL: http://user-service:3001
+      USER_SERVICE_URL: http://user-service:3004
       # CORS
-      CORS_ORIGIN: http://localhost:3001,http://localhost:5173
+      CORS_ORIGIN: http://localhost:3004,http://localhost:5173
     ports:
       - "3002:3002"
     networks:
@@ -284,25 +284,24 @@ services:
   web:
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/web/Dockerfile.dev
     container_name: chat-web
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       VITE_API_URL: http://localhost:3000/api/v1
       VITE_SOCKET_URL: http://localhost:3002
       VITE_APP_NAME: Chat App
     ports:
-      - "5173:80"
+      - "3001:3001"
     networks:
       - chat-network
     depends_on:
       - api-gateway
       - websocket-gateway
     volumes:
-      - ./apps/web:/app/apps/web
+      - ./apps/web:/app
       - /app/node_modules
-      - /app/apps/web/node_modules
 
 networks:
   chat-network:

@@ -30,7 +30,7 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  const port = process.env.HTTP_PORT || 3001;
+  const port = process.env.HTTP_PORT || 3004;
   await app.listen(port);
 
   logger.log(`🚀 Users service is running on port ${port}`, 'Bootstrap');

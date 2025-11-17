@@ -15,8 +15,8 @@ export class ChatController {
     @All('*path')
     async proxy(@Req() req: Request, @Param('path') path: string) {
         const chatServiceUrl = this.configsService.getOrThrow<string>('CHAT_SERVICE_URL');
-        req.url.replace('/chat', '');
-        const targetUrl = `${chatServiceUrl}/${path}`;
+
+        const targetUrl = `${chatServiceUrl}/${path.replaceAll(',', '/')}`;
 
         const headers = {
             'x-user-id': req['userId'],

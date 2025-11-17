@@ -29,6 +29,6 @@ import { forwardRef } from '@nestjs/common';
         MessageService,
         PresenceService,
     ],
-    exports: [ChatGateway],
+    exports: [ChatGateway, PresenceService],
 })
 export class GatewayModule {}
