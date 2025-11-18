@@ -4,91 +4,136 @@ import {
     SubscribeMessage,
     ConnectedSocket,
     MessageBody,
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import { ConnectionService } from './services/connection.service';
+import { ConfigService } from '@nestjs/config';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { EVENTS } from '@app/contracts';
-import {PresenceService} from "./services/presence.service";
-import {RoomService} from "./services/room.service";
+import { RoomService } from './services/room.service';
+import { ConnectionRegistryService } from '../registry/connection-registry.service';
+import {JwtService} from "@nestjs/jwt";
 
 @WebSocketGateway({
     cors: { origin: '*' },
     namespace: 'chat',
 })
-export class ChatGateway {
+export class ChatGateway
+    implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
     @WebSocketServer()
     server: Server;
 
     private readonly logger = new Logger(ChatGateway.name);
 
     constructor(
-        private readonly connectionService: ConnectionService,
-        private readonly presenceService: PresenceService,
+        private readonly connectionRegistry: ConnectionRegistryService,
         private readonly roomService: RoomService,
         private readonly rabbitMQService: RabbitMQService,
+        private readonly configService: ConfigService,
+        private readonly jwtService: JwtService,
     ) {}
 
+    /**
+     * Gateway initialization - called once when server starts
+     */
     async afterInit(server: Server) {
-        this.connectionService.setServer(server);
         this.logger.log('ChatGateway initialized');
+        this.logger.log(`Server ID: ${this.configService.get('SERVER_ID') || process.pid}`);
+        this.logger.log(`Namespace: /chat`);
     }
 
     /**
-     * Called automatically when client connects
+     * Handle new client connection
+     * Called automatically when client connects via Socket.IO
      */
     async handleConnection(client: Socket) {
         try {
-            const userId = await this.connectionService.handleConnection(client);
-            await this.presenceService.setUserOnline(userId, client.id);
+            const userId = this.extractUserId(client);
+            const connectionId = client.id;
 
-            this.logger.log(`Client connected: ${client.id}, User: ${userId}`);
+            if (!userId) {
+                this.logger.warn(`Connection rejected: No user ID - ${connectionId}`);
+                client.emit('connection:error', { error: 'Authentication required' });
+                client.disconnect(true);
+                return;
+            }
+
+            await this.connectionRegistry.registerConnection(userId, connectionId, {
+                userAgent: client.handshake.headers['user-agent'],
+                ip: client.handshake.address,
+            });
+
+            this.logger.log(`Client connected: ${connectionId}, User: ${userId}`);
 
             client.emit('connection:success', {
                 userId,
-                socketId: client.id,
+                socketId: connectionId,
+                serverId: this.configService.get('SERVER_ID') || process.pid,
+                timestamp: new Date().toISOString(),
             });
         } catch (error) {
-            this.logger.error(`Connection failed: ${error.message}`);
+            this.logger.error(`Connection failed: ${error.message}`, error.stack);
             client.emit('connection:error', { error: error.message });
-            client.disconnect();
+            client.disconnect(true);
         }
     }
 
+    /**
+     * Handle client disconnection
+     * Called automatically when client disconnects
+     */
     async handleDisconnect(client: Socket) {
         try {
-            const userId = await this.connectionService.handleDisconnection(client);
+            const connectionId = client.id;
 
-            if (userId) {
-                await this.presenceService.setUserOffline(userId, client.id);
-                this.logger.log(`Client disconnected: ${client.id}, User: ${userId}`);
+            // Get connection metadata from registry
+            const metadata = await this.connectionRegistry.getConnectionMetadata(connectionId);
+
+            if (!metadata) {
+                this.logger.warn(`⚠️ Disconnect: No metadata found for ${connectionId}`);
+                return;
             }
+
+            const { userId } = metadata;
+
+            await this.connectionRegistry.unregisterConnection(connectionId);
+
+            this.logger.log(`Client disconnected: ${connectionId}, User: ${userId}`);
         } catch (error) {
-            this.logger.error(`Disconnection error: ${error.message}`);
+            this.logger.error(`Disconnection error: ${error.message}`, error.stack);
         }
     }
 
+    /**
+     * Join conversation room
+     * Triggered by: socket.emit('conversation:join', { conversationId })
+     */
     @SubscribeMessage('conversation:join')
     async handleJoinConversation(
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { conversationId: string },
     ) {
         try {
-            const userId = await this.connectionService.getUserId(client.id);
+            const metadata = await this.connectionRegistry.getConnectionMetadata(client.id);
 
-            if (!userId) {
+            if (!metadata) {
                 return { success: false, error: 'Not authenticated' };
             }
 
-            await this.roomService.joinConversation(
-                client,
-                userId,
-                data.conversationId,
-            );
+            const { userId } = metadata;
+
+            if (!data.conversationId) {
+                return { success: false, error: 'Conversation ID required' };
+            }
+
+            await this.roomService.joinConversation(client, userId, data.conversationId);
 
             this.logger.log(
-                `User ${userId} joined conversation ${data.conversationId}`,
+                `User ${userId} joined conversation ${data.conversationId} (socket: ${client.id})`,
             );
 
             return { success: true };
@@ -108,10 +153,17 @@ export class ChatGateway {
         @MessageBody() data: { conversationId: string },
     ) {
         try {
+            if (!data.conversationId) {
+                return { success: false, error: 'Conversation ID required' };
+            }
+
+            const metadata = await this.connectionRegistry.getConnectionMetadata(client.id);
+            const userId = metadata?.userId;
+
             await this.roomService.leaveConversation(client, data.conversationId);
 
             this.logger.log(
-                `Client ${client.id} left conversation ${data.conversationId}`,
+                `Client ${client.id}${userId ? ` (User: ${userId})` : ''} left conversation ${data.conversationId}`,
             );
 
             return { success: true };
@@ -121,10 +173,15 @@ export class ChatGateway {
         }
     }
 
+    /**
+     * Handle outgoing message from client
+     * Triggered by: socket.emit('message:send', { conversationId, content, ... })
+     */
     @SubscribeMessage('message:send')
     async handleOutgoingMessage(
         @ConnectedSocket() client: Socket,
-        @MessageBody() data: {
+        @MessageBody()
+        data: {
             conversationId: string;
             content: string;
             type?: string;
@@ -132,46 +189,54 @@ export class ChatGateway {
         },
     ) {
         try {
-            const userId = await this.connectionService.getUserId(client.id);
+            const metadata = await this.connectionRegistry.getConnectionMetadata(client.id);
 
-            if (!userId) {
+            if (!metadata) {
                 return {
                     success: false,
                     error: 'Not authenticated',
                 };
             }
 
+            const { userId } = metadata;
+
+            // Validate input
             if (!data.conversationId || !data.content) {
                 return {
                     success: false,
-                    error: 'Missing required fields',
+                    error: 'Missing required fields: conversationId and content',
                 };
             }
 
             const tempMessageId = `temp:${Date.now()}:${userId}`;
 
-            await this.rabbitMQService.publish('chat.exchange', 'message.create.request', {
-                eventType: EVENTS.MESSAGE_CREATE_REQUEST,
-                tempMessageId,
-                conversationId: data.conversationId,
-                senderId: userId,
-                content: data.content,
-                type: data.type || 'text',
-                metadata: data.metadata || {},
-                timestamp: new Date().toISOString(),
-            });
+            // Publish to RabbitMQ for Chat Service to process
+            await this.rabbitMQService.publish(
+                'chat.exchange',
+                'message.create.request',
+                {
+                    eventType: EVENTS.MESSAGE_CREATE_REQUEST,
+                    tempMessageId,
+                    conversationId: data.conversationId,
+                    senderId: userId,
+                    content: data.content,
+                    type: data.type || 'text',
+                    metadata: data.metadata || {},
+                    timestamp: new Date().toISOString(),
+                },
+            );
 
             this.logger.log(
-                `Message queued for processing: ${tempMessageId} from user ${userId}`,
+                `📤 Message queued: ${tempMessageId} from user ${userId} to conversation ${data.conversationId}`,
             );
 
             return {
                 success: true,
                 messageId: tempMessageId,
+                timestamp: new Date().toISOString(),
             };
-
         } catch (error) {
-            this.logger.error(`Error handling outgoing message: ${error.message}`);
+            this.logger.error(`Error handling outgoing message: ${error.message}`, error.stack);
 
             return {
                 success: false,
@@ -180,73 +245,72 @@ export class ChatGateway {
         }
     }
 
-    /**
-     * Broadcast message to conversation participants
-     * Called by RabbitMQ consumer after Chat Service persists message
-     */
     async broadcastMessage(conversationId: string, message: any) {
-        this.server
-            .to(`conversation:${conversationId}`)
-            .emit('message:new', message);
+        try {
+            // Emit to all clients in the conversation room
+            this.server.to(`conversation:${conversationId}`).emit('message:new', {
+                messageId: message.messageId,
+                conversationId: message.conversationId,
+                senderId: message.senderId,
+                content: message.content,
+                type: message.type,
+                metadata: message.metadata,
+                sentAt: message.sentAt,
+                tempMessageId: message.tempMessageId,
+            });
 
-        this.logger.log(
-            `Message broadcasted to conversation: ${conversationId}`,
-        );
+            this.logger.log(
+                `📢 Message ${message.messageId} broadcasted to conversation: ${conversationId}`,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast message to conversation ${conversationId}: ${error.message}`,
+            );
+        }
     }
 
-    /**
-     * Send message confirmation to original sender
-     * After Chat Service persists the message
-     */
     async sendMessageConfirmation(userId: string, data: any) {
-        const socketIds = await this.connectionService.getUserSockets(userId);
+        try {
+            // Get all socket connections for this user (multiple devices)
+            const connections = await this.connectionRegistry.getUserConnections(userId);
 
-        for (const socketId of socketIds) {
-            this.server.to(socketId).emit('message:confirmed', {
-                tempMessageId: data.tempMessageId,
-                realMessageId: data.messageId,
-                conversationId: data.conversationId,
-                sentAt: data.sentAt,
-            });
+            if (connections.length === 0) {
+                this.logger.warn(`No connections found for user ${userId} - cannot send confirmation`);
+                return;
+            }
+
+            // Send confirmation to all user's devices
+            for (const socketId of connections) {
+                this.server.to(socketId).emit('message:confirmed', {
+                    tempMessageId: data.tempMessageId,
+                    realMessageId: data.messageId,
+                    conversationId: data.conversationId,
+                    sentAt: data.sentAt,
+                });
+            }
+
+            this.logger.log(
+                `Message confirmation sent to user ${userId} (${connections.length} device(s))`,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to send confirmation to user ${userId}: ${error.message}`,
+            );
+        }
+    }
+
+    private extractUserId(socket: Socket): string | null {
+        const token = socket.handshake.auth.token;
+        if (token) {
+            try {
+                const decoded = this.jwtService.verify(token);
+                return decoded.userId;
+            } catch (error) {
+                this.logger.error(`Failed to verify token: ${error.message}`);
+                return null;
+            }
         }
 
-        this.logger.log(`Message confirmation sent to user: ${userId}`);
-    }
-
-    @SubscribeMessage('message:delivered')
-    async handleMessageDelivered(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { messageId: string },
-    ) {
-        const userId = await this.connectionService.getUserId(client.id);
-
-        // Publish delivery receipt
-        await this.rabbitMQService.publish('chat.exchange', 'message.status.delivered',{
-            eventType: EVENTS.MESSAGE_DELIVERED,
-            messageId: data.messageId,
-            userId,
-            deliveredAt: new Date().toISOString(),
-        });
-
-        this.logger.log(`Message ${data.messageId} delivered to ${userId}`);
-    }
-
-    @SubscribeMessage('message:read')
-    async handleMessageRead(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { messageId: string; conversationId: string },
-    ) {
-        const userId = await this.connectionService.getUserId(client.id);
-
-        // Publish read receipt
-        await this.rabbitMQService.publish('chat.exchange', 'message.status.read',{
-            eventType: EVENTS.MESSAGE_READ,
-            messageId: data.messageId,
-            conversationId: data.conversationId,
-            userId,
-            readAt: new Date().toISOString(),
-        });
-
-        this.logger.log(`Message ${data.messageId} read by ${userId}`);
+        return null;
     }
 }

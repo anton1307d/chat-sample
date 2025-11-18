@@ -1,13 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'socket.io';
-import { InjectRedis } from '../../redis/redis.decorator';
-import { Redis } from 'ioredis';
+import {RedisService} from "../../redis/redis.service";
 
 @Injectable()
 export class RoomService {
     private readonly logger = new Logger(RoomService.name);
 
-    constructor(@InjectRedis() private redis: Redis) {}
+    constructor(private redis: RedisService) {}
 
     async joinConversation(
         client: Socket,

@@ -4,6 +4,7 @@ import { MessageCreateConsumer } from "./consumers/message-create.consumer";
 import { ConversationsModule } from "../conversations/conversations.module";
 import { MessagesModule } from "../messages/messages.module";
 
+
 @Global()
 @Module({
     imports: [ConversationsModule, forwardRef(() => MessagesModule)],

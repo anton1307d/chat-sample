@@ -6,6 +6,7 @@ import { Conversation } from './entities/conversation.entity';
 import { Participant } from './entities/participant.entity';
 import {InternalServiceGuard} from "@app/common";
 
+
 @Module({
     imports: [TypeOrmModule.forFeature([Conversation, Participant])],
     controllers: [ConversationsController],
