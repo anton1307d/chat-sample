@@ -10,3 +10,4 @@ export * from './filters';
 export * from './types';
 export * from './rabbitmq';
 export * from './guards';
+export * from './redis';

@@ -6,9 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PresenceModule } from './presence/presence.module';
 import { HealthModule } from './health/health.module';
-import { RedisModule } from './redis/redis.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import {InternalServiceGuard, LoggerModule} from "@app/common";
+import {InternalServiceGuard, LoggerModule, RedisModule} from "@app/common";
 import { User } from './users/entities/user.entity';
 @Module({
     imports: [
@@ -27,7 +26,17 @@ import { User } from './users/entities/user.entity';
             }),
             inject: [ConfigService],
         }),
-        RedisModule,
+        RedisModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                host: configService.get('REDIS_HOST', 'localhost'),
+                port: configService.get('REDIS_PORT', 6379),
+                password: configService.get('REDIS_PASSWORD'),
+                db: 1,
+                keyPrefix: 'users:',
+            }),
+            inject: [ConfigService],
+        }),
         AuthModule,
         UsersModule,
         PresenceModule,

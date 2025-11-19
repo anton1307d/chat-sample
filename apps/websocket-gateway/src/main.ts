@@ -2,11 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './adapters/redis-io.adapter';
-import { Logger } from '@nestjs/common';
+import { LoggerService } from '@app/common';
 
 async function bootstrap() {
-    const logger = new Logger('Bootstrap');
     const app = await NestFactory.create(AppModule);
+    const logger = app.get(LoggerService);
+    app.useLogger(logger);
 
     const configService = app.get(ConfigService);
 
@@ -20,15 +21,13 @@ async function bootstrap() {
         credentials: true,
     });
 
-    //
-
     const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
     signals.forEach((signal) => {
         process.on(signal, async () => {
-            logger.log(`Received ${signal}, starting graceful shutdown...`);
+            logger.log(`Received ${signal}, starting graceful shutdown...`, 'Bootstrap');
             await redisIoAdapter.close();
             await app.close();
-            logger.log('Application closed');
+            logger.log('Application closed', 'Bootstrap');
             process.exit(0);
         });
     });
@@ -36,8 +35,7 @@ async function bootstrap() {
     const port = configService.get<number>('PORT') || 3002;
     await app.listen(port);
 
-
-    logger.log(`WebSocket Gateway running on port ${port}`);
+    logger.log(`WebSocket Gateway running on port ${port}`, 'Bootstrap');
 }
 
 bootstrap();

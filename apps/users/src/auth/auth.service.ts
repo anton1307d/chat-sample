@@ -10,10 +10,9 @@ import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { HashUtil } from '@app/common';
+import { HashUtil, InjectRedis } from '@app/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import { InjectRedis } from '../redis/redis.decorator';
 
 @Injectable()
 export class AuthService {

@@ -1,8 +1,9 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { Injectable, HttpException, Logger } from '@nestjs/common';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 @Injectable()
 export class HttpService {
+    private readonly logger = new Logger(HttpService.name);
     private axiosInstance: AxiosInstance;
 
     constructor() {
@@ -20,13 +21,13 @@ export class HttpService {
                 },
             };
 
-            console.log('Sending request to:', config);
+            this.logger.log(`Sending request to: ${url} [${method}]`);
 
             const response = await this.axiosInstance.request(config);
             return response.data;
         } catch (error) {
             //
-            console.error('Error forwarding request:', error);
+            this.logger.error(`Error forwarding request to ${url}:`, error.message);
             if (error.response) {
                 throw new HttpException(
                     error.response.data,

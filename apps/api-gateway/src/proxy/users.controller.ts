@@ -1,4 +1,4 @@
-import { Controller, All, Req, Param, UseGuards } from '@nestjs/common';
+import { Controller, All, Req, Param, UseGuards, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import { HttpService } from './services/http.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,6 +8,8 @@ import {CurrentUser} from "@app/common";
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
+    private readonly logger = new Logger(UsersController.name);
+
     constructor(
         private readonly httpService: HttpService,
         private readonly configsService: ConfigService
@@ -25,7 +27,7 @@ export class UsersController {
             'content-type': req.headers['content-type'],
         };
 
-        console.log('Proxying request to:', headers);
+        this.logger.log(`Proxying request to: ${targetUrl} [user: ${userId}]`);
 
         return this.httpService.forward(
             targetUrl,

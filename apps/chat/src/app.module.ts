@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import {ConfigModule, ConfigService} from '@nestjs/config';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
-import { RedisModule } from './redis/redis.module';
-import {LoggerModule} from "@app/common";
+import {LoggerModule, RedisModule} from "@app/common";
 import {ConversationsModule} from "./conversations/conversations.module";
 import {TypeOrmModule} from "@nestjs/typeorm";
 import {Participant} from "./conversations/entities/participant.entity";
@@ -34,7 +33,17 @@ import {MongooseModule} from "@nestjs/mongoose";
             }),
             inject: [ConfigService],
         }),
-        RedisModule,
+        RedisModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                host: configService.get('REDIS_HOST', 'localhost'),
+                port: configService.get('REDIS_PORT', 6379),
+                password: configService.get('REDIS_PASSWORD'),
+                db: 3,
+                keyPrefix: 'chat:',
+            }),
+            inject: [ConfigService],
+        }),
         RabbitMQModule,
         LoggerModule,
         ConversationsModule,

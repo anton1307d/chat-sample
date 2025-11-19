@@ -1,14 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from 'nestjs-pino';
 import {AppModule} from "./app.module";
-import {HttpExceptionFilter} from "@app/common";
+import {HttpExceptionFilter, LoggerService} from "@app/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  const logger = app.get(Logger);
+  const logger = app.get(LoggerService);
 
     app.useGlobalPipes(
         new ValidationPipe({
@@ -30,7 +29,7 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  const port = process.env.HTTP_PORT || 3004;
+  const port = configService.get<number>('HTTP_PORT') || 3004;
   await app.listen(port);
 
   logger.log(`🚀 Users service is running on port ${port}`, 'Bootstrap');

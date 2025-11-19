@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GatewayModule } from './gateway/gateway.module';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
-import { RedisModule } from './redis/redis.module';
-import {LoggerModule} from "@app/common";
+import {LoggerModule, RedisModule} from "@app/common";
 import {ConnectionRegistryModule} from "./registry/connection-registry.module";
+import redisConfig from './config/redis.config';
 
 
 @Module({
@@ -12,8 +12,26 @@ import {ConnectionRegistryModule} from "./registry/connection-registry.module";
         ConfigModule.forRoot({
             isGlobal: true,
             envFilePath: '.env',
+            load: [redisConfig],
         }),
-        RedisModule,
+        RedisModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => {
+                const redisConfig = configService.get('redis');
+                return {
+                    host: redisConfig.host,
+                    port: redisConfig.port,
+                    password: redisConfig.password,
+                    db: redisConfig.db,
+                    keyPrefix: redisConfig.keyPrefix,
+                    connectTimeout: redisConfig.connectTimeout,
+                    maxRetriesPerRequest: redisConfig.maxRetriesPerRequest,
+                    enableReadyCheck: redisConfig.enableReadyCheck,
+                    retryStrategy: redisConfig.retryStrategy,
+                };
+            },
+            inject: [ConfigService],
+        }),
         RabbitMQModule,
         GatewayModule,
         LoggerModule,

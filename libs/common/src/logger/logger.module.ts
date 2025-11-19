@@ -1,18 +1,9 @@
-import { Module } from '@nestjs/common';
-import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+import { Module, Global } from '@nestjs/common';
+import { LoggerService } from './logger.service';
 
+@Global()
 @Module({
-  imports: [
-    PinoLoggerModule.forRoot({
-      pinoHttp: {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            singleLine: true,
-          },
-        },
-      },
-    }),
-  ],
+  providers: [LoggerService],
+  exports: [LoggerService],
 })
 export class LoggerModule {}

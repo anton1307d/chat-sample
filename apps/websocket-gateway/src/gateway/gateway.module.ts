@@ -3,7 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ChatGateway } from './chat.gateway';
 import { RoomService } from './services/room.service';
-import { RedisModule } from '../redis/redis.module';
+import { RedisModule } from '@app/common';
 import {RabbitMQModule} from "../rabbitmq/rabbitmq.module";
 import { forwardRef } from '@nestjs/common';
 

@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { LoggerModule, RedisModule } from '@app/common';
 import { AuthModule } from './auth/auth.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
-import { RedisModule } from './redis/redis.module';
 
 @Module({
     imports: [
@@ -19,7 +19,18 @@ import { RedisModule } from './redis/redis.module';
                 limit: 1000, // 100 requests per minute
             },
         ]),
-        RedisModule,
+        LoggerModule,
+        RedisModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                host: configService.get('REDIS_HOST', 'localhost'),
+                port: configService.get('REDIS_PORT', 6379),
+                password: configService.get('REDIS_PASSWORD'),
+                db: 0,
+                keyPrefix: 'ratelimit:',
+            }),
+            inject: [ConfigService],
+        }),
         RateLimitModule,
         AuthModule,
         ProxyModule,

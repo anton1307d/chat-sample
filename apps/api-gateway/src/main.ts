@@ -1,13 +1,16 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter} from '@app/common';
+import { HttpExceptionFilter, LoggerService } from '@app/common';
 import helmet from 'helmet';
 import * as compression from 'compression';
 
 async function bootstrap() {
-    const logger = new Logger('APIGateway');
     const app = await NestFactory.create(AppModule);
+    const configService = app.get(ConfigService);
+    const logger = app.get(LoggerService);
+    app.useLogger(logger);
 
     app.use(helmet());
     app.use(compression());
@@ -23,7 +26,7 @@ async function bootstrap() {
     app.useGlobalFilters(new HttpExceptionFilter());
 
     app.enableCors({
-        origin: process.env.CORS_ORIGIN?.split(',') || '*',
+        origin: configService.get<string>('CORS_ORIGIN')?.split(',') || '*',
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
@@ -33,12 +36,12 @@ async function bootstrap() {
 
     app.enableShutdownHooks();
 
-    const port = process.env.HTTP_PORT || 3000;
+    const port = configService.get<number>('HTTP_PORT') || 3000;
     await app.listen(port);
 
-    logger.log(`🚀 API Gateway running on: http://localhost:${port}`);
-    logger.log(`📚 API Documentation: http://localhost:${port}/api/v1`);
-    logger.log(`🔒 Security: Helmet, CORS, Rate Limiting enabled`);
+    logger.log(`API Gateway running on: http://localhost:${port}`, 'Bootstrap');
+    logger.log(`API Documentation: http://localhost:${port}/api/v1`, 'Bootstrap');
+    logger.log(`Security: Helmet, CORS, Rate Limiting enabled`, 'Bootstrap');
 }
 
 bootstrap();

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'socket.io';
-import {RedisService} from "../../redis/redis.service";
+import {RedisService} from "@app/common";
 
 @Injectable()
 export class RoomService {

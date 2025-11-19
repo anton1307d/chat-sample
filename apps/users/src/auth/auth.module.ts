@@ -7,7 +7,6 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
-import { RedisModule } from '../redis/redis.module';
 
 @Module({
     imports: [
@@ -23,7 +22,6 @@ import { RedisModule } from '../redis/redis.module';
             }),
             inject: [ConfigService],
         }),
-        RedisModule,
     ],
     controllers: [AuthController],
     providers: [AuthService, JwtStrategy],

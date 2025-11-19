@@ -5,6 +5,7 @@ import {
     Body,
     Param,
     UseGuards,
+    Logger,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -13,11 +14,13 @@ import { CurrentUser, InternalServiceGuard } from '@app/common';
 @Controller('users')
 @UseGuards(InternalServiceGuard)
 export class UsersController {
+    private readonly logger = new Logger(UsersController.name);
+
     constructor(private readonly usersService: UsersService) {}
 
     @Get('me')
     async getProfile(@CurrentUser('userId') userId: string) {
-        console.log('Fetching profile for user:', userId);
+        this.logger.log(`Fetching profile for user: ${userId}`);
         const user = await this.usersService.findById(userId);
         return user.toJSON();
     }

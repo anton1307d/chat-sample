@@ -4,8 +4,7 @@ import {
     HealthCheckService,
     TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
-import { Public } from '@app/common';
-import { InjectRedis } from '../redis/redis.decorator';
+import { Public, InjectRedis } from '@app/common';
 import { Redis } from 'ioredis';
 
 @Controller('health')
