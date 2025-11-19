@@ -26,8 +26,8 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
                 host: configService.get('REDIS_HOST', 'localhost'),
                 port: configService.get('REDIS_PORT', 6379),
                 password: configService.get('REDIS_PASSWORD'),
-                db: 0,
-                keyPrefix: 'ratelimit:',
+                db: 2, // Use separate db to avoid collision with websocket-gateway (db 0)
+                keyPrefix: 'api-gateway:',
             }),
             inject: [ConfigService],
         }),
